@@ -111,6 +111,53 @@ def binarize(interactions, threshold=0.0):
     return binarized
 
 
+def filter_min_interactions(interactions, min_user=5, min_item=0):
+    """
+    Remove users (and optionally items) with fewer than N interactions.
+
+    Filtering is applied iteratively since removing items can push users
+    below the threshold and vice versa.
+
+    Args:
+        interactions: List of (user, item, value, timestamp).
+        min_user: Minimum interactions per user to keep (default 5).
+        min_item: Minimum interactions per item to keep (default 0 = no filter).
+
+    Returns:
+        Filtered list of interactions.
+    """
+    prev_count = len(interactions) + 1
+
+    while len(interactions) < prev_count:
+        prev_count = len(interactions)
+
+        if min_user > 0:
+            user_counts = defaultdict(int)
+            for u, i, v, ts in interactions:
+                user_counts[u] += 1
+            interactions = [
+                (u, i, v, ts) for u, i, v, ts in interactions
+                if user_counts[u] >= min_user
+            ]
+
+        if min_item > 0:
+            item_counts = defaultdict(int)
+            for u, i, v, ts in interactions:
+                item_counts[i] += 1
+            interactions = [
+                (u, i, v, ts) for u, i, v, ts in interactions
+                if item_counts[i] >= min_item
+            ]
+
+    remaining_users = len(set(u for u, _, _, _ in interactions))
+    remaining_items = len(set(i for _, i, _, _ in interactions))
+    print(f"Filtered: {remaining_users} users (min={min_user}), "
+          f"{remaining_items} items (min={min_item}), "
+          f"{len(interactions)} interactions remaining")
+
+    return interactions
+
+
 def build_interaction_matrix(interactions, num_users, num_items):
     """
     Build a sparse user-item interaction matrix R (CSR format).
@@ -226,14 +273,18 @@ def subsample(interactions, fraction, seed=42):
     return subsampled
 
 
-def load_and_prepare(data_dir, dataset="100k", rating_threshold=0.0, subsample_frac=1.0):
+def load_and_prepare(data_dir, dataset="100k", rating_threshold=0.0,
+                     min_user_interactions=5, min_item_interactions=0,
+                     subsample_frac=1.0):
     """
-    Full pipeline: load -> reindex -> binarize -> split -> build matrices.
+    Full pipeline: load -> reindex -> binarize -> filter -> split -> build matrices.
 
     Args:
         data_dir: Path to data/ directory.
         dataset: "100k", "1m", or "10m".
         rating_threshold: Min rating to count as positive.
+        min_user_interactions: Drop users with fewer interactions (default 5).
+        min_item_interactions: Drop items with fewer interactions (default 0).
         subsample_frac: Fraction of users to keep (1.0 = all).
 
     Returns:
@@ -244,6 +295,20 @@ def load_and_prepare(data_dir, dataset="100k", rating_threshold=0.0, subsample_f
     raw = load_movielens_raw(data_dir, dataset)
     reindexed, user_map, item_map, num_users, num_items = reindex_ids(raw)
     binarized = binarize(reindexed, threshold=rating_threshold)
+
+    if min_user_interactions > 0 or min_item_interactions > 0:
+        binarized = filter_min_interactions(
+            binarized, min_user=min_user_interactions,
+            min_item=min_item_interactions
+        )
+        # Re-reindex after filtering
+        binarized, user_map_filt, item_map_filt, num_users, num_items = reindex_ids(
+            binarized
+        )
+        inv_user = {v: k for k, v in user_map.items()}
+        inv_item = {v: k for k, v in item_map.items()}
+        user_map = {inv_user[k]: v for k, v in user_map_filt.items()}
+        item_map = {inv_item[k]: v for k, v in item_map_filt.items()}
 
     if subsample_frac < 1.0:
         binarized = subsample(binarized, subsample_frac)
