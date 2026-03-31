@@ -19,28 +19,18 @@ import numpy as np
 from scipy import sparse
 
 
+import time
+import numpy as np
+
+import time
+import numpy as np
+
 def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
                    reg=0.01, alpha=1.0, c0=1.0, num_partitions=None,
                    seed=42, verbose=True):
     """
     Train eALS model using PySpark RDDs.
-
-    Args:
-        sc: SparkContext.
-        train_matrix: scipy.sparse.csr_matrix (num_users × num_items), binary.
-        num_factors: Latent dimension k.
-        num_iter: Number of ALS iterations.
-        reg: L2 regularization lambda.
-        alpha: Confidence boost for observed entries (c_ui = 1 + alpha).
-        c0: Uniform confidence weight for missing entries.
-        num_partitions: Number of RDD partitions (default: sc.defaultParallelism).
-        seed: Random seed.
-        verbose: Print progress.
-
-    Returns:
-        P: np.ndarray (num_users × k).
-        Q: np.ndarray (num_items × k).
-        losses: list of loss per iteration.
+    Features: Distributed MapReduce + Popularity Weights + Checkpointing + Static Topology (Cake Optimization).
     """
     rng = np.random.RandomState(seed)
     M, N = train_matrix.shape
@@ -50,132 +40,191 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
         num_partitions = sc.defaultParallelism
 
     c_obs = 1.0 + alpha
+    pop_alpha = 0.5
 
-    # Initialize factors
-    P = rng.normal(0, 0.01, (M, k))
-    Q = rng.normal(0, 0.01, (N, k))
+    # ==========================================
+    # PRE-COMPUTATION: Item Popularity Weights
+    # ==========================================
+    coo = train_matrix.tocoo()
+    interactions = list(zip(coo.row, coo.col))
+    interactions_rdd = sc.parallelize(interactions, num_partitions).cache()
 
-    # Build per-user interaction data: list of (user_id, item_indices_array)
-    R_csr = train_matrix.tocsr()
-    user_data = []
-    for u in range(M):
-        items = R_csr[u].indices.copy()
-        if len(items) > 0:
-            user_data.append((u, items))
+    item_freq_rdd = interactions_rdd.map(lambda x: (x[1], 1)).reduceByKey(lambda a, b: a + b)
+    sum_f_alpha = item_freq_rdd.map(lambda x: x[1]**pop_alpha).sum()
+    item_weights_rdd = item_freq_rdd.mapValues(lambda f: c0 * (f**pop_alpha) / sum_f_alpha)
 
-    # Build per-item interaction data
-    R_csc = train_matrix.tocsc()
-    item_data = []
-    for i in range(N):
-        users = R_csc[:, i].indices.copy()
-        if len(users) > 0:
-            item_data.append((i, users))
+    # ==========================================
+    # CAKE OPTIMIZATION: Pre-build Static Topologies
+    # ==========================================
+    # Instead of rebuilding the graph every iteration, we build it once,
+    # partition it so it stays on specific workers, and lock it in RAM.
 
-    # Create and cache RDDs (static structure, reused every iteration)
-    user_rdd = sc.parallelize(user_data, num_partitions).cache()
-    item_rdd = sc.parallelize(item_data, num_partitions).cache()
+    # Format: (user_id, [item_id_1, item_id_2, ...])
+    user_topology = interactions_rdd.groupByKey().mapValues(list).partitionBy(num_partitions).cache()
+
+    # Format: (item_id, [user_id_1, user_id_2, ...])
+    item_topology = interactions_rdd.map(lambda x: (x[1], x[0])).groupByKey().mapValues(list).partitionBy(num_partitions).cache()
+
+    # ==========================================
+    # INITIALIZATION (Co-partitioned with Topology)
+    # ==========================================
+    P_init = [(u, rng.normal(0, 0.01, k)) for u in range(M)]
+    Q_init = [(i, rng.normal(0, 0.01, k)) for i in range(N)]
+
+    # We partition P and Q identically to the topologies so joins require NO network shuffle!
+    user_rdd = sc.parallelize(P_init).partitionBy(num_partitions).cache()
+
+    raw_item_rdd = sc.parallelize(Q_init).partitionBy(num_partitions)
+    item_rdd = raw_item_rdd.leftOuterJoin(item_weights_rdd) \
+        .mapValues(lambda x: (x[0], x[1] if x[1] is not None else 0.0)) \
+        .partitionBy(num_partitions).cache()
 
     losses = []
+    if verbose:
+        R_csr = train_matrix.tocsr()
 
     for iteration in range(num_iter):
         t_start = time.time()
 
-        # ---- Update P (user factors) ----
-        Sq = Q.T @ Q  # k × k
-        Q_bc = sc.broadcast(Q)
+        # ==========================================
+        # ---- UPDATE P (USER FACTORS) ----
+        # ==========================================
+        Sq = item_rdd.map(lambda x: x[1][1] * np.outer(x[1][0], x[1][0])).sum()
         Sq_bc = sc.broadcast(Sq)
 
-        def update_user_partition(iterator):
-            """Process a partition of users, updating all their factors."""
-            q_local = Q_bc.value
+        # 1. Explode the static topology to fetch the current Item factors
+        # Format: (item_id, user_id)
+        user_requests = user_topology.flatMapValues(lambda items: items).map(lambda x: (x[1], x[0]))
+
+        # 2. Join to get the current Q vectors: (item_id, (user_id, q_data))
+        fetched_items = user_requests.join(item_rdd)
+
+        # 3. Regroup back to users: (user_id, [(item_id, q_data), ...])
+        # Because we partitionBy here, Spark routes the data directly to the co-located user partitions
+        shopping_list_rdd = fetched_items.map(lambda x: (x[1][0], (x[0], x[1][1]))) \
+                                         .groupByKey(num_partitions).mapValues(list)
+
+        # 4. Local Join (Zero Shuffle because user_rdd is already partitioned the same way)
+        user_update_data = user_rdd.leftOuterJoin(shopping_list_rdd)
+
+        def update_user_partition(user_data):
+            u, (p_u, item_list) = user_data
+            p_u = p_u.copy()
             sq_local = Sq_bc.value
-            results = []
 
-            for u, item_indices in iterator:
-                p_u = P_bc.value[u].copy()
-                Q_u = q_local[item_indices]  # |I_u| × k
-                pred_cache = Q_u @ p_u
+            if not item_list:
+                return (u, p_u)
 
-                for f in range(k):
-                    q_f = Q_u[:, f]
-                    hat_r = 1.0 - pred_cache + p_u[f] * q_f
+            Q_u = np.array([item[1][0] for item in item_list])
+            C_u = np.array([item[1][1] for item in item_list])
 
-                    numer = (c_obs - c0) * np.dot(q_f, hat_r)
-                    numer -= c0 * (p_u @ sq_local[:, f] - p_u[f] * sq_local[f, f])
+            pred_cache = Q_u @ p_u
 
-                    denom = (c_obs - c0) * np.dot(q_f, q_f) + c0 * sq_local[f, f] + reg
+            for f in range(k):
+                q_f = Q_u[:, f]
+                hat_r = 1.0 - pred_cache + p_u[f] * q_f
 
-                    old_val = p_u[f]
-                    p_u[f] = numer / denom
-                    pred_cache += (p_u[f] - old_val) * q_f
+                numer = np.dot(q_f, (c_obs - C_u) * hat_r)
+                numer -= (p_u @ sq_local[:, f] - p_u[f] * sq_local[f, f])
+                denom = np.dot(q_f ** 2, c_obs - C_u) + sq_local[f, f] + reg
 
-                results.append((u, p_u))
-            return iter(results)
+                old_val = p_u[f]
+                p_u[f] = numer / denom
+                pred_cache += (p_u[f] - old_val) * q_f
 
-        P_bc = sc.broadcast(P)
-        updated_users = user_rdd.mapPartitions(update_user_partition).collect()
-        for u, p_u in updated_users:
-            P[u] = p_u
+            return (u, p_u)
 
-        Q_bc.unpersist()
+        old_user_rdd = user_rdd
+        # Ensure the new RDD maintains the partitioning scheme!
+        user_rdd = user_update_data.map(update_user_partition).partitionBy(num_partitions)
+        user_rdd.checkpoint()
+        user_rdd.cache()
+        user_rdd.count()
+
+        old_user_rdd.unpersist()
         Sq_bc.unpersist()
-        P_bc.unpersist()
 
-        # ---- Update Q (item factors) ----
-        Sp = P.T @ P  # k × k
-        P_bc = sc.broadcast(P)
+        # ==========================================
+        # ---- UPDATE Q (ITEM FACTORS) ----
+        # ==========================================
+        Sp = user_rdd.map(lambda x: np.outer(x[1], x[1])).sum()
         Sp_bc = sc.broadcast(Sp)
 
-        def update_item_partition(iterator):
-            """Process a partition of items, updating all their factors."""
-            p_local = P_bc.value
+        # 1. Explode the static topology to fetch current User factors
+        # Format: (user_id, item_id)
+        item_requests = item_topology.flatMapValues(lambda users: users).map(lambda x: (x[1], x[0]))
+
+        # 2. Join to get current P vectors
+        fetched_users = item_requests.join(user_rdd)
+
+        # 3. Regroup back to items
+        item_shopping_list_rdd = fetched_users.map(lambda x: (x[1][0], (x[0], x[1][1]))) \
+                                              .groupByKey(num_partitions).mapValues(list)
+
+        # 4. Local Join
+        item_update_data = item_rdd.leftOuterJoin(item_shopping_list_rdd)
+
+        def update_item_partition(item_data):
+            i, (q_data, user_list) = item_data
+            q_i = q_data[0].copy()
+            c_i = q_data[1]
             sp_local = Sp_bc.value
-            results = []
 
-            for i, user_indices in iterator:
-                q_i = Q_bc2.value[i].copy()
-                P_i = p_local[user_indices]
-                pred_cache = P_i @ q_i
+            if not user_list:
+                return (i, (q_i, c_i))
 
-                for f in range(k):
-                    p_f = P_i[:, f]
-                    hat_r = 1.0 - pred_cache + q_i[f] * p_f
+            P_i = np.array([p_u for user_id, p_u in user_list])
+            pred_cache = P_i @ q_i
 
-                    numer = (c_obs - c0) * np.dot(p_f, hat_r)
-                    numer -= c0 * (q_i @ sp_local[:, f] - q_i[f] * sp_local[f, f])
+            for f in range(k):
+                p_f = P_i[:, f]
+                hat_r = 1.0 - pred_cache + q_i[f] * p_f
 
-                    denom = (c_obs - c0) * np.dot(p_f, p_f) + c0 * sp_local[f, f] + reg
+                numer = np.dot(p_f, (c_obs - c_i) * hat_r)
+                numer -= c_i * (q_i @ sp_local[:, f] - q_i[f] * sp_local[f, f])
+                denom = (c_obs - c_i) * np.dot(p_f, p_f) + c_i * sp_local[f, f] + reg
+                old_val = q_i[f]
+                q_i[f] = numer / denom
+                pred_cache += (q_i[f] - old_val) * p_f
 
-                    old_val = q_i[f]
-                    q_i[f] = numer / denom
-                    pred_cache += (q_i[f] - old_val) * p_f
+            return (i, (q_i, c_i))
 
-                results.append((i, q_i))
-            return iter(results)
+        old_item_rdd = item_rdd
+        item_rdd = item_update_data.map(update_item_partition).partitionBy(num_partitions)
+        item_rdd.checkpoint()
+        item_rdd.cache()
+        item_rdd.count()
 
-        Q_bc2 = sc.broadcast(Q)
-        updated_items = item_rdd.mapPartitions(update_item_partition).collect()
-        for i, q_i in updated_items:
-            Q[i] = q_i
-
-        P_bc.unpersist()
+        old_item_rdd.unpersist()
         Sp_bc.unpersist()
-        Q_bc2.unpersist()
 
         elapsed = time.time() - t_start
 
         if verbose:
+            P = np.zeros((M, k))
+            for u, p_u in user_rdd.collect():
+                P[u] = p_u
+
+            Q = np.zeros((N, k))
+            for i, (q_i, c_i) in item_rdd.collect():
+                Q[i] = q_i
+
             loss = _compute_loss_fast(P, Q, R_csr, c_obs, c0, reg)
             losses.append(loss)
-            print(f"Iteration {iteration + 1}/{num_iter} | "
-                  f"loss={loss:.4f} | time={elapsed:.2f}s")
+            print(f"Iteration {iteration + 1}/{num_iter} | loss={loss:.4f} | time={elapsed:.2f}s")
 
-    # Clean up cached RDDs
-    user_rdd.unpersist()
-    item_rdd.unpersist()
+    # ==========================================
+    # FINALIZATION
+    # ==========================================
+    P = np.zeros((M, k))
+    for u, p_u in user_rdd.collect():
+        P[u] = p_u
+
+    Q = np.zeros((N, k))
+    for i, (q_i, c_i) in item_rdd.collect():
+        Q[i] = q_i
 
     return P, Q, losses
-
 
 def _compute_loss_fast(P, Q, R_csr, c_obs, c0, reg):
     """
@@ -219,6 +268,7 @@ if __name__ == "__main__":
     conf = SparkConf().setAppName("eALS-RDD").setMaster("local[*]")
     sc = SparkContext(conf=conf)
     sc.setLogLevel("WARN")
+    sc.setCheckpointDir("/tmp/spark-checkpoints")
 
     print("\nTraining eALS (PySpark RDD)...")
     P, Q, losses = eals_train_rdd(
