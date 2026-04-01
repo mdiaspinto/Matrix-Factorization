@@ -1,0 +1,70 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{hu2008}
+\citation{he2016}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Description of the Adopted Solution}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Problem Setting}{1}{subsection.1.1}\protected@file@percent }
+\newlabel{eq:loss}{{1}{1}{Problem Setting}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}The eALS Algorithm}{1}{subsection.1.2}\protected@file@percent }
+\newlabel{eq:update}{{3}{1}{The eALS Algorithm}{equation.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Why This Approach}{2}{subsection.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Algorithm Design}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Overall Structure}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Complexity}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Spark Parallelization Strategy}{2}{subsection.2.3}\protected@file@percent }
+\citation{he2016}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Code Commentary}{3}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.4.1}Data Loading and Preprocessing}{3}{subsubsection.2.4.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}{\ignorespaces Binarization and minimum-interaction filtering.}}{3}{lstlisting.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.4.2}Element-wise User Update (NumPy)}{3}{subsubsection.2.4.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2}{\ignorespaces Core element-wise update for user factors.}}{3}{lstlisting.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.4.3}Spark RDD Parallelization}{4}{subsubsection.2.4.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {3}{\ignorespaces User update distributed via Spark RDD.}}{4}{lstlisting.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.4.4}Loss Computation}{4}{subsubsection.2.4.4}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4}{\ignorespaces Efficient loss computation using the trace trick.}}{5}{lstlisting.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.4.5}Evaluation}{5}{subsubsection.2.4.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {5}{\ignorespaces Leave-one-out evaluation with Hit Rate and NDCG.}}{5}{lstlisting.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Experimental Analysis}{5}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Convergence}{5}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Convergence over 50 iterations. Left: training loss. Center: Hit Rate at $K=5,10,20$. Right: NDCG at $K=5,10,20$.}}{6}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:convergence}{{1}{6}{Convergence over 50 iterations. Left: training loss. Center: Hit Rate at $K=5,10,20$. Right: NDCG at $K=5,10,20$}{figure.caption.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Effect of Latent Dimensionality}{6}{subsection.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Effect of latent factors on quality and speed (30 iterations).}}{6}{table.caption.2}\protected@file@percent }
+\newlabel{tab:kfactors}{{1}{6}{Effect of latent factors on quality and speed (30 iterations)}{table.caption.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Left: recommendation quality vs.\ $k$. Right: computation time per iteration vs.\ $k$.}}{6}{figure.caption.3}\protected@file@percent }
+\newlabel{fig:kfactors}{{2}{6}{Left: recommendation quality vs.\ $k$. Right: computation time per iteration vs.\ $k$}{figure.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Scalability with Dataset Size}{7}{subsection.3.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Scalability with dataset size ($k=32$, 20 iterations).}}{7}{table.caption.4}\protected@file@percent }
+\newlabel{tab:scale}{{2}{7}{Scalability with dataset size ($k=32$, 20 iterations)}{table.caption.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Left: average iteration time vs.\ number of training interactions, with a linear reference line. Right: HR@10 and NDCG@10 vs.\ dataset fraction.}}{7}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:scale}{{3}{7}{Left: average iteration time vs.\ number of training interactions, with a linear reference line. Right: HR@10 and NDCG@10 vs.\ dataset fraction}{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}NumPy vs.\ PySpark RDD}{7}{subsection.3.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces NumPy vs.\ Spark RDD ($k=32$, 20 iterations).}}{8}{table.caption.6}\protected@file@percent }
+\newlabel{tab:impl}{{3}{8}{NumPy vs.\ Spark RDD ($k=32$, 20 iterations)}{table.caption.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Loss convergence for NumPy and Spark RDD (curves overlap exactly).}}{8}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:spark_loss}{{4}{8}{Loss convergence for NumPy and Spark RDD (curves overlap exactly)}{figure.caption.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Comparison with Spark MLlib ALS}{8}{subsection.3.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces eALS vs.\ Spark MLlib ALS ($k=32$, 20 iterations).}}{8}{table.caption.8}\protected@file@percent }
+\newlabel{tab:baseline}{{4}{8}{eALS vs.\ Spark MLlib ALS ($k=32$, 20 iterations)}{table.caption.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Side-by-side comparison of eALS and MLlib ALS across metrics.}}{8}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:baseline}{{5}{8}{Side-by-side comparison of eALS and MLlib ALS across metrics}{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion: Strengths and Weaknesses}{9}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Strengths of eALS}{9}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Weaknesses and Limitations}{9}{subsection.4.2}\protected@file@percent }
+\bibcite{he2016}{1}
+\bibcite{hu2008}{2}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Comparison with MLlib}{10}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {A}Full Source Code}{10}{appendix.A}\protected@file@percent }
+\newlabel{sec:code}{{A}{10}{Full Source Code}{appendix.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}data\_loader.py}{10}{subsection.A.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{../src/data\textunderscore loader.py}{10}{lstlisting.-1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}eals\_numpy.py}{16}{subsection.A.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{../src/eals\textunderscore numpy.py}{16}{lstlisting.-2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}eals\_rdd.py}{20}{subsection.A.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{../src/eals\textunderscore rdd.py}{20}{lstlisting.-3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}evaluation.py}{24}{subsection.A.4}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{../src/evaluation.py}{24}{lstlisting.-4}\protected@file@percent }
+\gdef \@abspage@last{25}

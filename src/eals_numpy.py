@@ -72,9 +72,9 @@ def eals_train(train_matrix, num_factors=64, num_iter=50,
 
         elapsed = time.time() - t_start
 
+        loss = _compute_loss(P, Q, R_csr, c_obs, c0, reg, M)
+        losses.append(loss)
         if verbose:
-            loss = _compute_loss(P, Q, R_csr, c_obs, c0, reg, M)
-            losses.append(loss)
             print(f"Iteration {iteration + 1}/{num_iter} | "
                   f"loss={loss:.4f} | time={elapsed:.2f}s")
 

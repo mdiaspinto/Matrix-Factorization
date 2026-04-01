@@ -164,9 +164,9 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
 
         elapsed = time.time() - t_start
 
+        loss = _compute_loss_fast(P, Q, R_csr, c_obs, c0, reg)
+        losses.append(loss)
         if verbose:
-            loss = _compute_loss_fast(P, Q, R_csr, c_obs, c0, reg)
-            losses.append(loss)
             print(f"Iteration {iteration + 1}/{num_iter} | "
                   f"loss={loss:.4f} | time={elapsed:.2f}s")
 
