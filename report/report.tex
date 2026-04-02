@@ -37,9 +37,8 @@
 }
 
 \title{Fast Matrix Factorization for Online Recommendation\\with Implicit Feedback\\[0.5em]\large Data Management Project Report}
-\author{[Student Names]\\
-  \'Ecole Polytechnique}
-\date{April 2026}
+\author{Martin Dias Pinto \and Hae In Keum \and Nikolai Levin}
+\date{\'Ecole Polytechnique\\[0.3em]April 2026}
 
 \begin{document}
 \maketitle
@@ -50,9 +49,11 @@
 
 \subsection{Problem Setting}
 
-Recommendation systems built on implicit feedback face a different problem than those built on explicit ratings. When a user rates a movie four stars, the signal is direct. When a user watches a movie, all we know is that some interaction occurred. The absence of an interaction is ambiguous: the user may dislike the item, or may simply not know it exists. This asymmetry between observed positives and unobserved (not necessarily negative) entries is the central difficulty.
+With explicit feedback, a user tells you directly what they think: a four-star rating on a movie is unambiguous. Implicit feedback is messier. A user watches a movie, and all we observe is that the interaction happened. If a user \emph{didn't} watch something, we don't know whether they disliked it or simply never heard of it. The model has to learn from this kind of incomplete information.
 
-Hu et al.~\cite{hu2008} formalized this by treating all user-item pairs as data points, assigning a confidence weight $c_{ui}$ to each. Observed interactions receive high confidence ($c_{ui} = 1 + \alpha$), while missing entries receive a low uniform weight $c_0$. The model then minimizes:
+Hu et al.~\cite{hu2008} proposed a way to handle this. We cite their paper here because the eALS algorithm we were assigned to implement (He et al.~\cite{he2016}) is a direct optimization of their formulation. The loss function, the confidence weighting, and the ALS solver all come from Hu et al., making it central to our project.
+
+Their idea is to treat every user-item pair as a data point, but weigh them differently. Observed interactions get high confidence ($c_{ui} = 1 + \alpha$), while missing entries get a small uniform weight $c_0$. The model minimizes:
 
 \begin{equation}
 \mathcal{L} = \sum_{u}\sum_{i} c_{ui}\left(r_{ui} - \mathbf{p}_u^\top \mathbf{q}_i\right)^2 + \lambda\left(\|\mathbf{P}\|^2 + \|\mathbf{Q}\|^2\right)
@@ -61,30 +62,30 @@ Hu et al.~\cite{hu2008} formalized this by treating all user-item pairs as data 
 
 where $r_{ui} = 1$ for observed interactions and $0$ otherwise, $\mathbf{P} \in \mathbb{R}^{M \times k}$ and $\mathbf{Q} \in \mathbb{R}^{N \times k}$ are the user and item latent factor matrices, and $\lambda$ controls regularization.
 
-The sum in Equation~\ref{eq:loss} runs over all $M \times N$ pairs, including the enormous number of zeros. Standard ALS solves this by alternating between fixing $\mathbf{Q}$ and solving for each $\mathbf{p}_u$ (and vice versa), but each user update requires constructing and inverting a $k \times k$ matrix that depends on all $N$ items. The per-user cost is $O(Nk^2)$, which becomes prohibitive for large item catalogs.
+The trouble is that the sum in Equation~\ref{eq:loss} runs over all $M \times N$ pairs, including the vast number of zeros. Standard ALS handles this by alternating: fix $\mathbf{Q}$, solve for each user $\mathbf{p}_u$, then fix $\mathbf{P}$ and solve for each item $\mathbf{q}_i$. But each user update requires building and inverting a $k \times k$ matrix that depends on all $N$ items. The per-user cost is $O(Nk^2)$, which gets expensive quickly as the item catalog grows.
 
 \subsection{The eALS Algorithm}
 
-He et al.~\cite{he2016} proposed element-wise ALS (eALS), which restructures the update to avoid iterating over all items. Instead of solving a $k$-dimensional linear system per user, eALS updates one latent factor at a time. The trick is to precompute:
+He et al.~\cite{he2016} proposed element-wise ALS (eALS), which avoids iterating over all items by restructuring the update. Rather than solving a $k$-dimensional linear system per user, eALS updates one latent factor at a time. The key idea is to precompute:
 
 \begin{equation}
 \mathbf{S}^q = \mathbf{Q}^\top \mathbf{Q} \in \mathbb{R}^{k \times k}
 \end{equation}
 
-This small matrix captures the aggregate contribution of all items. With $\mathbf{S}^q$ in hand, the closed-form update for user $u$, factor $f$ becomes:
+This is a small matrix that summarizes the aggregate contribution of all items. Once you have $\mathbf{S}^q$, the closed-form update for user $u$, factor $f$ is:
 
 \begin{equation}
 p_{uf} = \frac{\displaystyle\sum_{i \in \mathcal{I}_u} (c_{ui} - c_0)\, q_{if}\, \hat{r}_{ui}^{(f)} \;-\; c_0\left(\mathbf{p}_u^\top \mathbf{S}^q_{:,f} - p_{uf}\, S^q_{ff}\right)}{\displaystyle\sum_{i \in \mathcal{I}_u} (c_{ui} - c_0)\, q_{if}^2 \;+\; c_0\, S^q_{ff} \;+\; \lambda}
 \label{eq:update}
 \end{equation}
 
-where $\hat{r}_{ui}^{(f)} = 1 - \sum_{f' \neq f} p_{uf'}\, q_{if'}$ is the residual with factor $f$ removed, and $\mathcal{I}_u$ is the set of items user $u$ interacted with. The numerator's first term sums only over observed items ($|\mathcal{I}_u|$ terms). The second term uses $\mathbf{S}^q$ to account for all items without enumerating them. This brings the per-user cost down to $O(|\mathcal{I}_u| \cdot k + k^2)$.
+where $\hat{r}_{ui}^{(f)} = 1 - \sum_{f' \neq f} p_{uf'}\, q_{if'}$ is the residual with factor $f$ removed, and $\mathcal{I}_u$ is the set of items user $u$ interacted with. The first term in the numerator sums only over observed items ($|\mathcal{I}_u|$ terms). The second term uses $\mathbf{S}^q$ to account for all items without touching them individually. This brings the per-user cost down to $O(|\mathcal{I}_u| \cdot k + k^2)$.
 
 \subsection{Why This Approach}
 
-We chose eALS for two reasons. First, the element-wise update avoids the $O(Nk^2)$ bottleneck of standard ALS, making it practical on larger datasets. Second, the structure is well-suited to distributed computation: when updating user factors, each user's computation depends only on the (broadcast) item matrix $\mathbf{Q}$ and the precomputed $\mathbf{S}^q$, with no dependencies between users. This makes the user-update step embarrassingly parallel, and likewise for the item-update step.
+eALS has two properties that make it well suited for this project. First, the element-wise update sidesteps the $O(Nk^2)$ cost of standard ALS, which matters once the item catalog gets large. Second, the algorithm parallelizes naturally: when updating user factors, each user's computation only reads from $\mathbf{Q}$ and $\mathbf{S}^q$, with no dependencies between users. So you can distribute users across Spark workers with no algorithmic changes, and the same applies when updating items.
 
-We implemented the algorithm in Python using NumPy (as a reference) and PySpark RDDs (for distributed execution), and evaluated it on the MovieLens 100K dataset using the leave-one-out protocol.
+We implemented the algorithm in Python using NumPy (single-machine reference) and PySpark RDDs (distributed), and evaluated on MovieLens datasets using the leave-one-out protocol from the paper.
 
 
 % ============================================================
@@ -93,15 +94,15 @@ We implemented the algorithm in Python using NumPy (as a reference) and PySpark 
 
 \subsection{Overall Structure}
 
-Each iteration of eALS consists of two symmetric half-steps:
+Each iteration has two symmetric half-steps:
 
 \begin{enumerate}
-\item \textbf{User update.} Compute $\mathbf{S}^q = \mathbf{Q}^\top \mathbf{Q}$. For each user $u$, update $p_{u0}, p_{u1}, \ldots, p_{u,k-1}$ sequentially using Equation~\ref{eq:update}. After updating $p_{uf}$, refresh a prediction cache so that $\hat{r}_{ui}^{(f+1)}$ can be computed cheaply.
+\item \textbf{User update.} Compute $\mathbf{S}^q = \mathbf{Q}^\top \mathbf{Q}$. For each user $u$, update $p_{u0}, p_{u1}, \ldots, p_{u,k-1}$ one at a time using Equation~\ref{eq:update}. After updating $p_{uf}$, refresh a prediction cache so that $\hat{r}_{ui}^{(f+1)}$ can be computed cheaply.
 
-\item \textbf{Item update.} Compute $\mathbf{S}^p = \mathbf{P}^\top \mathbf{P}$. For each item $i$, update $q_{i0}, q_{i1}, \ldots, q_{i,k-1}$ using the symmetric formula (swapping roles of $\mathbf{P}$ and $\mathbf{Q}$).
+\item \textbf{Item update.} Compute $\mathbf{S}^p = \mathbf{P}^\top \mathbf{P}$. For each item $i$, update $q_{i0}, q_{i1}, \ldots, q_{i,k-1}$ using the symmetric formula (swap $\mathbf{P}$ and $\mathbf{Q}$).
 \end{enumerate}
 
-The prediction cache avoids recomputing $\mathbf{p}_u^\top \mathbf{q}_i$ from scratch after each factor update. When $p_{uf}$ changes by $\delta$, the cache is patched: $\text{cache}[i] \mathrel{+}= \delta \cdot q_{if}$, costing $O(|\mathcal{I}_u|)$ instead of $O(|\mathcal{I}_u| \cdot k)$.
+The prediction cache is a practical optimization. Without it, after updating $p_{uf}$ you would need to recompute $\mathbf{p}_u^\top \mathbf{q}_i$ for all of user $u$'s items before updating the next factor. With the cache, you just patch it: $\text{cache}[i] \mathrel{+}= \delta \cdot q_{if}$, where $\delta$ is the change in $p_{uf}$. This costs $O(|\mathcal{I}_u|)$ instead of $O(|\mathcal{I}_u| \cdot k)$.
 
 \subsection{Complexity}
 
@@ -111,29 +112,29 @@ Per iteration, the cost breaks down as:
 \item Updating all users: $O\!\left(\sum_u |\mathcal{I}_u| \cdot k + M k^2\right) = O(|\mathcal{R}|\,k + Mk^2)$
 \item Precomputing $\mathbf{S}^p$ and updating all items: $O(|\mathcal{R}|\,k + Nk^2)$
 \end{itemize}
-Total: $O(|\mathcal{R}|\,k + (M+N)k^2)$, where $|\mathcal{R}|$ is the number of observed interactions. Compare this to standard ALS at $O((M+N)Nk^2)$. For MovieLens 100K, $|\mathcal{R}| \approx 100\text{K}$ and $MN \approx 1.6\text{M}$, so eALS is already roughly $16\times$ cheaper per iteration.
+Total: $O(|\mathcal{R}|\,k + (M+N)k^2)$, where $|\mathcal{R}|$ is the number of observed interactions. Standard ALS costs $O((M+N)Nk^2)$. For MovieLens 100K, $|\mathcal{R}| \approx 100\text{K}$ and $MN \approx 1.6\text{M}$, so eALS is already roughly $16\times$ cheaper per iteration.
 
 \subsection{Spark Parallelization Strategy}
 
-The user-update half-step has no data dependencies between users: each user's update reads from $\mathbf{Q}$ and $\mathbf{S}^q$, which are fixed for the duration of the half-step. We parallelize this in Spark as follows:
+During the user-update half-step, no user's update depends on any other user's. Each one only reads $\mathbf{Q}$ and $\mathbf{S}^q$, both of which are fixed for the whole half-step. We take advantage of this in Spark:
 
 \begin{enumerate}
 \item The driver computes $\mathbf{S}^q$ ($k \times k$, cheap) and broadcasts both $\mathbf{Q}$ and $\mathbf{S}^q$ to all workers.
-\item An RDD of \texttt{(user\_id, item\_indices)} is partitioned across workers. Each worker processes its assigned users independently.
+\item An RDD of \texttt{(user\_id, item\_indices)} is partitioned across workers. Each worker processes its chunk of users independently.
 \item Updated user vectors are collected back to the driver.
 \end{enumerate}
 
-The item-update step is symmetric: broadcast $\mathbf{P}$ and $\mathbf{S}^p$, partition items, collect updated item vectors.
+The item-update step works the same way: broadcast $\mathbf{P}$ and $\mathbf{S}^p$, partition items, collect results.
 
-The only synchronization point is between half-steps: all user updates must finish before item updates begin (and vice versa), because item updates read the new $\mathbf{P}$.
+The only point where workers have to wait for each other is between half-steps: all user updates must finish before item updates start, because item updates need the new $\mathbf{P}$.
 
 \subsection{Code Commentary}
 
-We now describe the main code fragments. The full code is in Appendix~\ref{sec:code}.
+Below we walk through the main code fragments. The complete source is in Appendix~\ref{sec:code}.
 
 \subsubsection{Data Loading and Preprocessing}
 
-The \texttt{data\_loader.py} module handles the pipeline from raw MovieLens files to sparse matrices ready for training.
+The \texttt{data\_loader.py} module takes raw MovieLens files and produces sparse matrices ready for training.
 
 \begin{lstlisting}[caption={Binarization and minimum-interaction filtering.}]
 def binarize(interactions, threshold=0.0):
@@ -160,9 +161,9 @@ def filter_min_interactions(interactions, min_user=5, min_item=0):
     return interactions
 \end{lstlisting}
 
-All ratings are converted to binary signals (line 3): any observed interaction becomes 1. The filtering loop (lines 9--18) iteratively removes users below the threshold, since removing items can push users below the minimum and vice versa. The loop converges in one or two passes for typical datasets.
+All ratings become binary (line 3): any observed interaction becomes 1. The filtering loop (lines 9--18) runs iteratively because removing items can push a user below the threshold and vice versa. In practice the loop converges in one or two passes.
 
-The train/test split uses a leave-one-out strategy: for each user, the most recent interaction (by timestamp) goes to the test set, and all earlier interactions form the training set. This matches the evaluation protocol in~\cite{he2016}.
+For the train/test split, we use leave-one-out: each user's most recent interaction (by timestamp) goes to the test set, and the rest is training data. This follows the protocol in~\cite{he2016}.
 
 \subsubsection{Element-wise User Update (NumPy)}
 
@@ -189,7 +190,7 @@ def _update_users(P, Q, R_csr, Sq, c_obs, c0, reg, M, k):
             pred_cache += (P[u, f] - old_val) * q_f
 \end{lstlisting}
 
-Line 7 computes $\mathbf{p}_u^\top \mathbf{q}_i$ for all observed items as a single matrix-vector product. The inner loop (line 9) iterates over factors. Line 11 computes $\hat{r}_{ui}^{(f)}$ by removing factor $f$'s contribution from the cached prediction. Lines 13--14 implement the numerator from Equation~\ref{eq:update}: the first term sums over observed items, and the second uses $\mathbf{S}^q$ for the all-items term. Line 20 patches the cache in $O(|\mathcal{I}_u|)$ rather than recomputing from scratch.
+Line 7 computes $\mathbf{p}_u^\top \mathbf{q}_i$ for all observed items in one matrix-vector product. The inner loop (line 9) iterates over factors. Line 11 computes $\hat{r}_{ui}^{(f)}$ by removing factor $f$'s contribution from the cached prediction. Lines 13--14 implement the numerator from Equation~\ref{eq:update}: the first term sums over observed items, the second uses $\mathbf{S}^q$ for the all-items contribution. Line 20 patches the cache in $O(|\mathcal{I}_u|)$ rather than recomputing everything.
 
 \subsubsection{Spark RDD Parallelization}
 
@@ -218,13 +219,13 @@ for u, p_u in updated_users:
     P[u] = p_u
 \end{lstlisting}
 
-The structure mirrors the NumPy version exactly. The difference is that the outer loop over users (line 10) runs inside a Spark partition, and each partition processes a disjoint subset of users in parallel. Lines 2--4 broadcast the read-only data ($\mathbf{Q}$, $\mathbf{S}^q$, $\mathbf{P}$) once to all workers instead of shipping it per-task. Line 20 collects the updated vectors back to the driver, which writes them into $\mathbf{P}$.
+The code mirrors the NumPy version. The difference is that the outer loop over users (line 10) runs inside a Spark partition, and partitions are processed in parallel on different cores or machines. Lines 2--4 broadcast $\mathbf{Q}$, $\mathbf{S}^q$, and $\mathbf{P}$ once to all workers, rather than shipping them per task. Line 20 collects the results back to the driver.
 
-We use \texttt{mapPartitions} rather than \texttt{map} to amortize the overhead of deserializing broadcast variables: each worker deserializes once per partition rather than once per user.
+We use \texttt{mapPartitions} rather than \texttt{map} so that each worker deserializes the broadcast variables once per partition rather than once per user.
 
 \subsubsection{Loss Computation}
 
-Computing the loss naively requires iterating over all $M \times N$ pairs. We avoid this with a decomposition:
+Computing the loss naively means iterating over all $M \times N$ pairs. We avoid this with a decomposition:
 
 \begin{lstlisting}[caption={Efficient loss computation using the trace trick.}]
 def _compute_loss(P, Q, R_csr, c_obs, c0, reg, M):
@@ -243,7 +244,7 @@ def _compute_loss(P, Q, R_csr, c_obs, c0, reg, M):
     return loss
 \end{lstlisting}
 
-Line 5 computes $c_0 \sum_u \sum_i (\mathbf{p}_u^\top \mathbf{q}_i)^2 = c_0 \cdot \text{tr}(\mathbf{S}^p \mathbf{S}^q)$ in $O(k^3)$, covering all pairs under the assumption $r_{ui}=0$. Lines 9--12 then correct for observed entries: subtract the wrong $c_0 \cdot \text{pred}^2$ and add the correct $c_\text{obs} \cdot (1-\text{pred})^2$. This loop only touches observed entries, so the total cost is $O(k^3 + |\mathcal{R}|\,k)$ instead of $O(MNk)$.
+The idea: first, pretend every entry has $r_{ui}=0$ and weight $c_0$. Line 5 computes this in $O(k^3)$ via $c_0 \cdot \text{tr}(\mathbf{S}^p \mathbf{S}^q)$, which equals $c_0 \sum_u \sum_i (\mathbf{p}_u^\top \mathbf{q}_i)^2$. Then lines 9--12 fix the observed entries: subtract the wrong $c_0 \cdot \text{pred}^2$ and add the correct $c_\text{obs} \cdot (1-\text{pred})^2$. The loop only touches observed entries, so the total cost is $O(k^3 + |\mathcal{R}|\,k)$ instead of $O(MNk)$.
 
 \subsubsection{Evaluation}
 
@@ -265,18 +266,18 @@ def evaluate(P, Q, train_matrix, test_dict, top_k=10):
             "NDCG": ndcg_sum / len(test_dict)}
 \end{lstlisting}
 
-For each test user, we score all items (line 6), mask out training items so they cannot appear in the ranking (line 7), and find the top-$K$ using \texttt{argpartition} (line 8), which runs in $O(N)$ rather than $O(N \log N)$ for a full sort. If the held-out item appears in the top-$K$, we record a hit and compute its NDCG contribution based on rank position (line 13).
+For each test user, we score all items (line 6), set training items to $-\infty$ so they can't appear in the ranking (line 7), and find the top-$K$ with \texttt{argpartition} (line 8), which is $O(N)$ rather than $O(N \log N)$. If the held-out item appears in the top-$K$, we record a hit and compute the NDCG contribution from its rank position (line 13).
 
 
 % ============================================================
 \section{Experimental Analysis}
 % ============================================================
 
-All experiments use the MovieLens 100K dataset (943 users, 1682 items, 100{,}000 interactions, 6.3\% density) with binary implicit feedback. Users with fewer than 5 interactions are filtered out (none were removed for this dataset, as the minimum is 20). We fix $\alpha = 1$, $c_0 = 1$, $\lambda = 0.01$ unless stated otherwise. Experiments ran on a MacBook with an Apple Silicon CPU; Spark was configured in local mode using all available cores.
+We used three MovieLens datasets: 100K (943 users, 1{,}682 items), 1M (6{,}040 users, 3{,}706 items), and 10M (69{,}878 users, 10{,}677 items), all with binary implicit feedback. Users with fewer than 5 interactions were removed. Unless noted otherwise, we set $\alpha = 1$, $c_0 = 1$, $\lambda = 0.01$. All experiments ran on a MacBook with an Apple Silicon CPU and 8 cores; Spark ran in local mode using all cores.
 
 \subsection{Convergence}
 
-We trained eALS with $k=32$ for 50 iterations and measured both the training loss and recommendation quality at regular intervals.
+We trained eALS with $k=32$ for 50 iterations, measuring both training loss and recommendation quality at regular intervals.
 
 \begin{figure}[H]
 \centering
@@ -285,9 +286,9 @@ We trained eALS with $k=32$ for 50 iterations and measured both the training los
 \label{fig:convergence}
 \end{figure}
 
-The loss (Figure~\ref{fig:convergence}, left) drops steeply during the first 5 iterations, losing roughly 20\% of its initial value, and flattens thereafter. Recommendation metrics tell a similar story: HR@10 rises from 0.070 at iteration 1 to 0.150 by iteration 5, with marginal changes after that. By iteration 20, the metrics have stabilized. Running 50 iterations produced HR@10 = 0.152, barely above the iteration-10 value of 0.148.
+The loss (Figure~\ref{fig:convergence}, left) drops steeply in the first 5 iterations, losing about 20\% of its initial value, then flattens. The recommendation metrics behave similarly: HR@10 goes from 0.070 at iteration 1 to 0.150 by iteration 5, with barely any change after that. At iteration 50, HR@10 is 0.152, only slightly above the value at iteration 10 (0.148).
 
-This confirms a known property of ALS methods: convergence is fast in the first few iterations, and additional passes yield diminishing improvements. For practical use on this dataset, 15--20 iterations would suffice.
+This is a well-known property of ALS: convergence is fast early on, and extra iterations buy you less and less. For this dataset, 15--20 iterations are enough.
 
 \subsection{Effect of Latent Dimensionality}
 
@@ -316,15 +317,43 @@ $k$ & HR@5 & HR@10 & HR@20 & NDCG@10 & Avg. iter (s) \\
 \label{fig:kfactors}
 \end{figure}
 
-Quality improves substantially from $k=8$ to $k=16$ (HR@10 jumps from 0.121 to 0.145) and more modestly from $k=16$ to $k=32$. Going to $k=64$ offers no improvement and in fact slightly degrades performance, likely due to overfitting on a dataset of this size. Meanwhile, computation time roughly doubles with each doubling of $k$, consistent with the $O(|\mathcal{R}|k + (M+N)k^2)$ complexity. For MovieLens 100K, $k=32$ gives the best quality-to-cost ratio.
+There is a large jump from $k=8$ to $k=16$ (HR@10: 0.121 to 0.145), a smaller gain at $k=32$, and no improvement at $k=64$. The slight dip at $k=64$ is likely overfitting on a dataset this small. Computation time roughly doubles with each doubling of $k$, which is consistent with the $O(|\mathcal{R}|k + (M+N)k^2)$ cost. For MovieLens 100K, $k=32$ is the best tradeoff between quality and speed.
 
 \subsection{Scalability with Dataset Size}
 
-To test how training time scales with data volume, we subsampled users at 25\%, 50\%, 75\%, and 100\%, keeping all interactions for the selected users. This varies both $M$ and $|\mathcal{R}|$ proportionally.
+We tested scalability two ways. First, by subsampling users within MovieLens 100K. Second, by running across three different datasets: ML-100K (99K interactions), ML-1M (994K), and subsampled fractions of ML-10M (up to 2.5M interactions). We could not train on the full 10M (69{,}878 users, 10M interactions) with pure Python loops in reasonable time; each iteration would have taken several minutes. This in itself shows where a distributed setup stops being optional.
 
 \begin{table}[H]
 \centering
-\caption{Scalability with dataset size ($k=32$, 20 iterations).}
+\caption{Scalability across MovieLens datasets ($k=32$, 10 iterations, NumPy).}
+\label{tab:cross}
+\begin{tabular}{lrrrrc}
+\toprule
+Dataset & Users & Items & Train NNZ & Avg. iter (s) & HR@10 \\
+\midrule
+ML-100K       &    943 &  1{,}682 &     99{,}057 & 0.80 & 0.148 \\
+ML-1M         &  6{,}040 &  3{,}706 &    994{,}169 & 3.38 & 0.088 \\
+ML-10M (5\%)  &  3{,}493 &  9{,}750 &    506{,}908 & 4.25 & 0.089 \\
+ML-10M (10\%) &  6{,}987 & 10{,}064 &  1{,}005{,}361 & 5.50 & 0.090 \\
+ML-10M (25\%) & 17{,}469 & 10{,}406 &  2{,}476{,}066 & 9.62 & 0.087 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../figures/cross_dataset_scalability.png}
+\caption{Left: per-iteration time vs.\ number of training interactions (log-log). ML-100K/1M and ML-10M subsets are plotted as separate series because they have different item counts, which affects the fixed-cost component. The dashed line shows linear scaling. Right: HR@10 and NDCG@10 across datasets.}
+\label{fig:cross}
+\end{figure}
+
+In Figure~\ref{fig:cross} (left), the two series (ML-100K/1M and ML-10M subsets) are plotted separately. This is because they have very different item counts (1.7K--3.7K vs. 9.7K--10.4K), and the per-iteration cost includes a fixed $O((M+N)k^2)$ component that depends on the item count. Within each series, the trend tracks the linear reference well. Going from 99K to 2.5M interactions ($25\times$) increased iteration time from 0.80s to 9.62s ($12\times$). The sub-linear behavior comes from the fixed-cost term: the $\mathbf{S}^q$ computation and per-factor inner products cost the same regardless of how many interactions exist. As data grows, the $O(|\mathcal{R}|k)$ term gradually dominates, and the scaling approaches linearity.
+
+Quality is notably higher on ML-100K (HR@10 = 0.148) than on ML-1M or 10M subsets (HR@10 around 0.088). ML-100K was curated to include only active users, so its interaction density is 6.3\% compared to about 1.4\% for 10M. Sparser data means fewer collaborative signals per user, making prediction harder.
+
+\begin{table}[H]
+\centering
+\caption{Scalability within MovieLens 100K ($k=32$, 20 iterations).}
 \label{tab:scale}
 \begin{tabular}{rcrrr}
 \toprule
@@ -338,47 +367,49 @@ Fraction & Users & Train NNZ & Avg. iter (s) & HR@10 \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{../figures/scalability.png}
-\caption{Left: average iteration time vs.\ number of training interactions, with a linear reference line. Right: HR@10 and NDCG@10 vs.\ dataset fraction.}
-\label{fig:scale}
-\end{figure}
-
-The time-vs-size relationship (Figure~\ref{fig:scale}, left) tracks the linear reference closely. Going from 25K to 99K interactions increased iteration time from 0.50s to 0.81s (a $1.6\times$ increase for a $4\times$ data increase). The sub-linear behavior is expected: the $O((M+N)k^2)$ term includes a fixed component from the item dimension $N$, which does not shrink proportionally when we subsample users. At larger absolute scales (millions of interactions), the $O(|\mathcal{R}|k)$ term would dominate and the scaling would approach linearity more closely.
-
-Recommendation quality generally improves with more data (more users means more collaborative signal), though the drop at 100\% relative to 75\% is within noise for a dataset of this size.
+Within ML-100K (Table~\ref{tab:scale}), the same near-linear trend appears: a $4\times$ increase in interactions yields a $1.6\times$ increase in iteration time, because the item-side fixed cost is shared across all fractions.
 
 \subsection{NumPy vs.\ PySpark RDD}
 
-Both implementations use identical algorithms and the same random seed.
+Both implementations use the same algorithm and the same random seed. We ran each on ML-100K and ML-1M to see how Spark's overhead amortizes as data grows.
 
 \begin{table}[H]
 \centering
-\caption{NumPy vs.\ Spark RDD ($k=32$, 20 iterations).}
+\caption{NumPy vs.\ Spark RDD ($k=32$, 10 iterations). Loss sequences match exactly.}
 \label{tab:impl}
-\begin{tabular}{lrrrr}
+\begin{tabular}{llrrr}
 \toprule
-Implementation & Total (s) & Avg. iter (s) & Final loss & HR@10 \\
+Dataset & Implementation & Total (s) & HR@10 & Speedup \\
 \midrule
-NumPy & 16.35 & 0.82 & 101{,}185.6 & 0.146 \\
-Spark RDD & 7.35 & 0.37 & 101{,}185.6 & 0.146 \\
+ML-100K & NumPy     &  8.13 & 0.148 & --- \\
+ML-100K & Spark RDD &  4.94 & 0.148 & 1.6$\times$ \\
+ML-1M   & NumPy     & 34.34 & 0.088 & --- \\
+ML-1M   & Spark RDD & 16.76 & 0.088 & 2.0$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The loss sequences are identical to six decimal places across all 20 iterations (Figure~\ref{fig:spark_loss}), confirming that the Spark implementation is a faithful parallelization. The Spark version is roughly $2\times$ faster in local mode, which reflects the multi-core parallelism compensating for the serialization and JVM overhead. On a true cluster with data that doesn't fit in single-machine memory, this gap would widen in Spark's favor.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{../figures/numpy_vs_spark_datasets.png}
+\caption{Total training time for NumPy and Spark RDD on ML-100K and ML-1M. Annotations show the speedup factor.}
+\label{fig:spark_bar}
+\end{figure}
+
+The loss sequences match to six decimal places on both datasets, which confirms the Spark version computes the same thing as the NumPy version. The speedup grows from $1.6\times$ on ML-100K to $2.0\times$ on ML-1M (Figure~\ref{fig:spark_bar}). This makes sense: Spark has fixed overhead (JVM startup, serialization, broadcasting), and that overhead takes up a smaller share of total time when there is more work to do. On a multi-node cluster where the data no longer fits on one machine, the distributed version would be the only option, and the speedup would keep growing with the number of workers.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.7\textwidth]{../figures/numpy_vs_spark_loss.png}
-\caption{Loss convergence for NumPy and Spark RDD (curves overlap exactly).}
+\caption{Loss convergence for NumPy and Spark RDD on ML-100K (curves overlap exactly).}
 \label{fig:spark_loss}
 \end{figure}
 
 \subsection{Comparison with Spark MLlib ALS}
 
-We compared our eALS against Spark's built-in ALS (\texttt{pyspark.ml.recommendation.ALS}) configured for implicit feedback, with the same $k=32$ and 20 iterations.
+The project brief does not ask for a baseline comparison, but we included one because our raw metrics are hard to interpret on their own. An HR@10 of 0.150 could be good or bad depending on the dataset and protocol, and the reader has no way to tell without a reference. We used Spark MLlib's built-in ALS (\texttt{pyspark.ml.recommendation.ALS}) because it is a well-known implementation of implicit feedback matrix factorization, and it runs in the same Spark ecosystem, making the comparison easy to set up.
+
+We configured MLlib ALS for implicit feedback with the same $k=32$ and 20 iterations.
 
 \begin{table}[H]
 \centering
@@ -401,7 +432,7 @@ MLlib ALS & 0.098 & 0.154 & 0.227 & 0.079 \\
 \label{fig:baseline}
 \end{figure}
 
-MLlib ALS edges out eALS by about 3\% relative on HR@10 (0.154 vs.\ 0.150). This gap is small and could be partly attributed to differences in implementation details: MLlib uses block-wise matrix partitioning and native JVM linear algebra, and its regularization and confidence weighting may differ slightly from our configuration. The two approaches are comparable in quality on this dataset.
+MLlib ALS scores about 3\% higher on HR@10 (0.154 vs.\ 0.150). The gap is small. Part of it may come from implementation differences: MLlib uses block-wise matrix partitioning and native JVM linear algebra, and its regularization and confidence weighting may not be identical to ours. The two approaches are comparable on this dataset.
 
 
 % ============================================================
@@ -410,29 +441,29 @@ MLlib ALS edges out eALS by about 3\% relative on HR@10 (0.154 vs.\ 0.150). This
 
 \subsection{Strengths of eALS}
 
-\textbf{Speed per iteration.} The precomputed $\mathbf{S}^q$ matrix eliminates the need to iterate over missing entries. On MovieLens 100K, each iteration takes under a second. Standard ALS, which constructs a $k \times k$ system per user involving all $N$ items, would be roughly an order of magnitude slower.
+\textbf{Speed per iteration.} The $\mathbf{S}^q$ precomputation removes the need to loop over missing entries. On MovieLens 100K, each iteration takes under a second. Standard ALS, which builds a $k \times k$ system per user involving all $N$ items, would be roughly an order of magnitude slower.
 
-\textbf{Straightforward parallelization.} Because user updates are independent of one another (given fixed $\mathbf{Q}$ and $\mathbf{S}^q$), distributing the work across Spark partitions required no algorithmic changes. The same element-wise update code runs on each worker; only the data shipping differs. This made the NumPy-to-Spark port mechanical rather than requiring a redesign.
+\textbf{Easy parallelization.} User updates don't depend on each other (given fixed $\mathbf{Q}$ and $\mathbf{S}^q$), so distributing them across Spark partitions required no changes to the algorithm itself. The same update code runs on each worker; only the data shipping differs. Porting from NumPy to Spark was mechanical.
 
-\textbf{Fast convergence.} The algorithm reaches near-optimal recommendation quality within 5--10 iterations (see Section 3.1). Combined with the low per-iteration cost, total training time is practical even without distributed computing for datasets of moderate size.
+\textbf{Fast convergence.} The algorithm gets close to its best recommendation quality within 5--10 iterations (Section 3.1). Combined with the low cost per iteration, total training time stays reasonable even without a cluster for medium-sized datasets.
 
-\textbf{Memory efficiency.} The working set for updating a single user is the user's own $k$-vector, the $|\mathcal{I}_u| \times k$ submatrix of $\mathbf{Q}$, and the $k \times k$ matrix $\mathbf{S}^q$. For $k=32$ and a user with 100 interactions, this is about 25 KB. Workers can process users with minimal memory overhead.
+\textbf{Low memory per worker.} To update one user, a worker needs the user's own $k$-vector, the $|\mathcal{I}_u| \times k$ submatrix of $\mathbf{Q}$, and the $k \times k$ matrix $\mathbf{S}^q$. For $k=32$ and a user with 100 interactions, that comes to about 25 KB.
 
 \subsection{Weaknesses and Limitations}
 
-\textbf{Driver bottleneck.} The full $\mathbf{P}$ and $\mathbf{Q}$ matrices live on the driver and are broadcast at every iteration. For MovieLens 100K this is negligible (about 400 KB for $\mathbf{Q}$ at $k=32$), but for a dataset with 10 million items the broadcast would be around 2.5 GB per half-step. At that scale, the communication cost would dominate the computation.
+\textbf{Driver bottleneck.} The full $\mathbf{P}$ and $\mathbf{Q}$ matrices live on the driver and get broadcast every iteration. For ML-100K this is negligible (about 400 KB for $\mathbf{Q}$ at $k=32$), but a dataset with 10 million items would mean broadcasting around 2.5 GB per half-step. At that point, communication would dominate computation.
 
-\textbf{Sequential factor updates within a user.} The element-wise update processes factors $f=0,1,\ldots,k-1$ sequentially because each update depends on the prediction cache, which is modified by the previous update. This inner loop cannot be parallelized. For large $k$, this serial dependency becomes the tightest bottleneck.
+\textbf{Sequential factor updates.} The element-wise update processes factors $f=0,1,\ldots,k-1$ one after another, because each one modifies the prediction cache that the next one reads. This inner loop cannot be parallelized. For large $k$, this becomes the tightest bottleneck.
 
-\textbf{Uniform weighting of missing data.} Our implementation uses a single weight $c_0$ for all missing entries. The paper also proposes item-popularity-based weighting (items interacted with by more users get higher missing-data weight), which can improve quality. We did not implement this variant due to time constraints.
+\textbf{Uniform weighting of missing data.} We use a single weight $c_0$ for all missing entries. The original paper also proposes item-popularity-based weighting, where items that more users interacted with get a higher missing-data weight. This can improve quality, but we did not implement it due to time constraints.
 
-\textbf{Limited dataset scale.} MovieLens 100K is small enough that single-machine NumPy is already fast ($\sim$0.8s per iteration). The benefit of Spark parallelization is modest at this scale ($2\times$ on a multi-core laptop). A proper scalability study would require MovieLens 10M or a larger dataset to show where the distributed version becomes necessary rather than optional. We were limited by the available compute environment.
+\textbf{Python loop bottleneck at 10M scale.} We could not train on the full MovieLens 10M (70K users, 10M interactions) in reasonable time. The element-wise update runs as a Python \texttt{for} loop over users and factors, and at 25\% of 10M users (17K users, 2.5M interactions), each iteration already took 9.6 seconds. Extrapolating, the full dataset would need roughly 40 seconds per iteration and over 30 minutes for 50 iterations. A Cython or C extension for the inner loop would fix this on one machine; on a real cluster, the Spark version would handle it.
 
-\textbf{No online update evaluation.} The paper's title references ``online recommendation,'' and eALS supports incremental updates when new interactions arrive (by updating only the affected user/item vectors without retraining from scratch). We implemented only the batch training and did not test incremental updates.
+\textbf{No online update evaluation.} The paper's title mentions ``online recommendation,'' and eALS does support incremental updates: when new interactions arrive, you can update only the affected user/item vectors instead of retraining from scratch. We only implemented batch training and did not test this.
 
 \subsection{Comparison with MLlib}
 
-MLlib ALS slightly outperformed our eALS on all metrics (Table~\ref{tab:baseline}). Two factors likely explain this. First, MLlib's implementation is heavily optimized at the JVM level with native BLAS calls, while our element-wise updates run in Python loops. Second, MLlib uses a different ALS formulation (standard block-wise) that solves the full $k$-dimensional system per user, which may converge to a slightly better optimum for the same number of iterations. The gap is small enough (3\% relative) that it does not diminish the practical value of eALS, particularly given its lower per-iteration computational cost.
+MLlib ALS slightly outperformed our eALS on all metrics (Table~\ref{tab:baseline}). Two things probably explain this. First, MLlib is heavily optimized at the JVM level with native BLAS, while our updates run in Python loops. Second, MLlib uses standard block-wise ALS, which solves the full $k$-dimensional system per user and may converge to a slightly better solution for the same iteration count. The gap is small enough (3\% relative) that it does not change the practical picture, especially given eALS's lower per-iteration cost.
 
 
 % ============================================================

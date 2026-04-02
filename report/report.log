@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.12.31)  1 APR 2026 16:47
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.12.31)  2 APR 2026 11:27
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -335,24 +335,24 @@ File: l3backend-pdftex.def 2025-10-09 L3 backend support: PDF output (pdfTeX)
 ) (./report.aux)
 \openout1 = `report.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 44.
-LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 43.
+LaTeX Font Info:    ... okay on input line 43.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
@@ -394,7 +394,7 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 48
  (/Users/mdiaspinto/Library/TinyTeX/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 ))
-Package hyperref Info: Link coloring OFF on input line 44.
+Package hyperref Info: Link coloring OFF on input line 43.
  (./report.out) (./report.out)
 \@outlinefile=\write3
 \openout3 = `report.out'.
@@ -403,47 +403,52 @@ Package hyperref Info: Link coloring OFF on input line 44.
 Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: float package is loaded.
 Package caption Info: End \AtBeginDocument code.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 46.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 45.
  (/Users/mdiaspinto/Library/TinyTeX/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 46.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 45.
  (/Users/mdiaspinto/Library/TinyTeX/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 ) [1
 
 {/Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2]
-Package hyperref Info: bookmark level for unknown lstlisting defaults to 0 on input line 138.
- [3] [4]
-<../figures/convergence.png, id=243, 1287.8514pt x 346.896pt>
+Package hyperref Info: bookmark level for unknown lstlisting defaults to 0 on input line 139.
+ [3] [4] [5]
+<../figures/convergence.png, id=282, 1287.8514pt x 346.896pt>
 File: ../figures/convergence.png Graphic file (type png)
 <use ../figures/convergence.png>
-Package pdftex.def Info: ../figures/convergence.png  used on input line 283.
+Package pdftex.def Info: ../figures/convergence.png  used on input line 284.
 (pdftex.def)             Requested size: 455.24411pt x 122.62225pt.
- [5]
-<../figures/latent_factors.png, id=283, 998.7714pt x 346.896pt>
+<../figures/latent_factors.png, id=285, 998.7714pt x 346.896pt>
 File: ../figures/latent_factors.png Graphic file (type png)
 <use ../figures/latent_factors.png>
-Package pdftex.def Info: ../figures/latent_factors.png  used on input line 314.
+Package pdftex.def Info: ../figures/latent_factors.png  used on input line 315.
 (pdftex.def)             Requested size: 455.24411pt x 158.11845pt.
- [6 <../figures/convergence.png> <../figures/latent_factors.png>]
-<../figures/scalability.png, id=293, 998.7714pt x 346.896pt>
-File: ../figures/scalability.png Graphic file (type png)
-<use ../figures/scalability.png>
-Package pdftex.def Info: ../figures/scalability.png  used on input line 343.
-(pdftex.def)             Requested size: 455.24411pt x 158.11845pt.
- [7 <../figures/scalability.png>]
-<../figures/numpy_vs_spark_loss.png, id=304, 709.6914pt x 346.896pt>
+ [6 <../figures/convergence.png>]
+<../figures/cross_dataset_scalability.png, id=293, 997.326pt x 349.7868pt>
+File: ../figures/cross_dataset_scalability.png Graphic file (type png)
+<use ../figures/cross_dataset_scalability.png>
+Package pdftex.def Info: ../figures/cross_dataset_scalability.png  used on input line 345.
+(pdftex.def)             Requested size: 455.24411pt x 159.66562pt.
+ [7 <../figures/latent_factors.png>] [8 <../figures/cross_dataset_scalability.png>]
+<../figures/numpy_vs_spark_datasets.png, id=311, 566.115pt x 349.305pt>
+File: ../figures/numpy_vs_spark_datasets.png Graphic file (type png)
+<use ../figures/numpy_vs_spark_datasets.png>
+Package pdftex.def Info: ../figures/numpy_vs_spark_datasets.png  used on input line 394.
+(pdftex.def)             Requested size: 295.90588pt x 182.58304pt.
+<../figures/numpy_vs_spark_loss.png, id=313, 709.6914pt x 346.896pt>
 File: ../figures/numpy_vs_spark_loss.png Graphic file (type png)
 <use ../figures/numpy_vs_spark_loss.png>
-Package pdftex.def Info: ../figures/numpy_vs_spark_loss.png  used on input line 374.
+Package pdftex.def Info: ../figures/numpy_vs_spark_loss.png  used on input line 403.
 (pdftex.def)             Requested size: 318.66948pt x 155.76299pt.
-<../figures/eals_vs_mllib.png, id=305, 709.6914pt x 348.3414pt>
+ [9 <../figures/numpy_vs_spark_datasets.png> <../figures/numpy_vs_spark_loss.png>]
+<../figures/eals_vs_mllib.png, id=323, 709.6914pt x 348.3414pt>
 File: ../figures/eals_vs_mllib.png Graphic file (type png)
 <use ../figures/eals_vs_mllib.png>
-Package pdftex.def Info: ../figures/eals_vs_mllib.png  used on input line 399.
+Package pdftex.def Info: ../figures/eals_vs_mllib.png  used on input line 430.
 (pdftex.def)             Requested size: 318.66948pt x 156.412pt.
- [8 <../figures/numpy_vs_spark_loss.png> <../figures/eals_vs_mllib.png>] [9] (../src/data_loader.py [10] [11] [12] [13] [14] [15]) (../src/eals_numpy.py [16] [17] [18] [19]) (../src/eals_rdd.py [20] [21] [22]) [23] (../src/evaluation.py [24]) [25] (./report.aux)
+ [10 <../figures/eals_vs_mllib.png>] (../src/data_loader.py [11] [12] [13] [14] [15] [16]) (../src/eals_numpy.py [17] [18] [19] [20]) (../src/eals_rdd.py [21] [22] [23] [24]) (../src/evaluation.py [25] [26]) [27] (./report.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
@@ -452,18 +457,18 @@ Package rerunfilecheck Info: File `report.out' has not changed.
 (rerunfilecheck)             Checksum: A23E915532D038A63122F9522AF0682A;4802.
  ) 
 Here is how much of TeX's memory you used:
- 15224 strings out of 469519
- 233057 string characters out of 5469078
- 1316779 words of memory out of 5000000
- 42578 multiletter control sequences out of 15000+600000
+ 15237 strings out of 469519
+ 233542 string characters out of 5469078
+ 1325779 words of memory out of 5000000
+ 42587 multiletter control sequences out of 15000+600000
  647005 words of font info for 92 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 75i,9n,79p,655b,2170s stack positions out of 10000i,1000n,20000p,200000b,200000s
- </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecti1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm0800.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt0900.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm0600.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/tcrm1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1200.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1440.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1728.600pk></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on report.pdf (25 pages, 784067 bytes).
+ 75i,9n,79p,768b,2160s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm0800.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt0900.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm0600.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/tcrm1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecti1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1095.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1200.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1440.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk> </Users/mdiaspinto/Library/TinyTeX/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1728.600pk></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></Users/mdiaspinto/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+Output written on report.pdf (27 pages, 835602 bytes).
 PDF statistics:
- 2078 PDF objects out of 2487 (max. 8388607)
- 1583 compressed objects within 16 object streams
- 1116 named destinations out of 1200 (max. 500000)
- 258 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 2099 PDF objects out of 2487 (max. 8388607)
+ 1595 compressed objects within 16 object streams
+ 1120 named destinations out of 1200 (max. 500000)
+ 263 words of extra memory for PDF output out of 10000 (max. 10000000)
 
