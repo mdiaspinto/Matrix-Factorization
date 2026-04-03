@@ -227,11 +227,14 @@ def leave_one_out_split(interactions, num_users, num_items):
             train_cols.append(items_ts[0][0])
         else:
             # Last interaction = test
-            test_dict[u] = items_ts[-1][0]
-            # Rest = train
+            test_item = items_ts[-1][0]
+            test_dict[u] = test_item
+            
+            # Rest = train (strictly excluding the test item to prevent leakage)
             for item_id, _ in items_ts[:-1]:
-                train_rows.append(u)
-                train_cols.append(item_id)
+                if item_id != test_item:
+                    train_rows.append(u)
+                    train_cols.append(item_id)
 
     train_values = np.ones(len(train_rows), dtype=np.float64)
     train_matrix = sparse.csr_matrix(
