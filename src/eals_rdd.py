@@ -20,10 +20,14 @@ from scipy import sparse
 
 
 def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
-                   reg=0.01, alpha=1.0, c0=1.0, num_partitions=None,
-                   seed=42, verbose=True):
+                   reg=0.01, alpha=1.0, c0=1.0, pop_alpha=0.5,
+                   num_partitions=None, seed=42, verbose=True):
     """
-    Train eALS model using PySpark RDDs.
+    Train eALS model using PySpark RDDs with popularity-aware missing data weighting.
+
+    Missing entry (u, i) receives weight ci proportional to item i's popularity
+    raised to pop_alpha (paper Section 4.1, Eq. 8). Setting pop_alpha=0 recovers
+    uniform weighting (ci = c0/N for all items).
 
     Args:
         sc: SparkContext.
@@ -32,7 +36,9 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
         num_iter: Number of ALS iterations.
         reg: L2 regularization lambda.
         alpha: Confidence boost for observed entries (c_ui = 1 + alpha).
-        c0: Uniform confidence weight for missing entries.
+        c0: Overall scale of missing data weights (paper's c0).
+        pop_alpha: Popularity exponent (paper's alpha, default 0.5).
+                   pop_alpha=0 gives uniform weights.
         num_partitions: Number of RDD partitions (default: sc.defaultParallelism).
         seed: Random seed.
         verbose: Print progress.
@@ -51,6 +57,15 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
 
     c_obs = 1.0 + alpha
 
+    # Per-item popularity weights (paper Eq. 8):
+    #   ci = c0 * f_i^pop_alpha / sum_j(f_j^pop_alpha)
+    # where f_i = |R_i| / sum_j|R_j|  (item interaction frequency)
+    # pop_alpha=0 → uniform weights (ci = c0/N); pop_alpha=0.5 is paper default.
+    item_counts = np.array(train_matrix.sum(axis=0)).flatten()  # shape: (N,)
+    f = item_counts / item_counts.sum()
+    f_alpha = np.power(f, pop_alpha)
+    c_items = c0 * f_alpha / f_alpha.sum()                      # shape: (N,)
+
     # Initialize factors
     P = rng.normal(0, 0.01, (M, k))
     Q = rng.normal(0, 0.01, (N, k))
@@ -63,13 +78,13 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
         if len(items) > 0:
             user_data.append((u, items))
 
-    # Build per-item interaction data
+    # Build per-item interaction data: (item_id, user_indices, ci)
     R_csc = train_matrix.tocsc()
     item_data = []
     for i in range(N):
         users = R_csc[:, i].indices.copy()
         if len(users) > 0:
-            item_data.append((i, users))
+            item_data.append((i, users, float(c_items[i])))
 
     # Create and cache RDDs (static structure, reused every iteration)
     user_rdd = sc.parallelize(user_data, num_partitions).cache()
@@ -81,29 +96,40 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
         t_start = time.time()
 
         # ---- Update P (user factors) ----
-        Sq = Q.T @ Q  # k × k
+        # S^q is weighted by item popularity: S^q = sum_i ci * qi * qi^T
+        Sq = Q.T @ (Q * c_items[:, np.newaxis])  # k × k, weighted
         Q_bc = sc.broadcast(Q)
         Sq_bc = sc.broadcast(Sq)
+        c_items_bc = sc.broadcast(c_items)
 
         def update_user_partition(iterator):
             """Process a partition of users, updating all their factors."""
             q_local = Q_bc.value
             sq_local = Sq_bc.value
+            c_local = c_items_bc.value
             results = []
 
             for u, item_indices in iterator:
                 p_u = P_bc.value[u].copy()
-                Q_u = q_local[item_indices]  # |I_u| × k
+                Q_u = q_local[item_indices]       # |I_u| × k
+                c_u = c_local[item_indices]       # |I_u|, ci per observed item
                 pred_cache = Q_u @ p_u
 
                 for f in range(k):
                     q_f = Q_u[:, f]
-                    hat_r = 1.0 - pred_cache + p_u[f] * q_f
+                    hat_r = pred_cache - p_u[f] * q_f  # r̂^f_ui for each observed item
 
-                    numer = (c_obs - c0) * np.dot(q_f, hat_r)
-                    numer -= c0 * (p_u @ sq_local[:, f] - p_u[f] * sq_local[f, f])
+                    # obs_pull: sum_{i in Iu} [c_obs - (c_obs-ci)*r̂^f_ui] * qif
+                    # c_u replaces the scalar c0 — each item has its own weight
+                    obs_pull = c_obs * np.sum(q_f) - np.dot((c_obs - c_u) * hat_r, q_f)
 
-                    denom = (c_obs - c0) * np.dot(q_f, q_f) + c0 * sq_local[f, f] + reg
+                    # missing_pull uses weighted Sq — c0 is absorbed into Sq already
+                    missing_pull = p_u @ sq_local[:, f] - p_u[f] * sq_local[f, f]
+
+                    numer = obs_pull - missing_pull
+
+                    # denom: sum_{i in Iu} (c_obs-ci)*qif^2 + Sq[f,f] + lambda
+                    denom = np.dot((c_obs - c_u) * q_f, q_f) + sq_local[f, f] + reg
 
                     old_val = p_u[f]
                     p_u[f] = numer / denom
@@ -120,8 +146,10 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
         Q_bc.unpersist()
         Sq_bc.unpersist()
         P_bc.unpersist()
+        c_items_bc.unpersist()
 
         # ---- Update Q (item factors) ----
+        # S^p = P^T P stays unweighted — ci is per-item, not per-user
         Sp = P.T @ P  # k × k
         P_bc = sc.broadcast(P)
         Sp_bc = sc.broadcast(Sp)
@@ -132,19 +160,24 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
             sp_local = Sp_bc.value
             results = []
 
-            for i, user_indices in iterator:
+            for i, user_indices, ci in iterator:  # ci is this item's popularity weight
                 q_i = Q_bc2.value[i].copy()
                 P_i = p_local[user_indices]
                 pred_cache = P_i @ q_i
 
                 for f in range(k):
                     p_f = P_i[:, f]
-                    hat_r = 1.0 - pred_cache + q_i[f] * p_f
+                    hat_r = pred_cache - q_i[f] * p_f  # r̂^f_ui for each observed user
 
-                    numer = (c_obs - c0) * np.dot(p_f, hat_r)
-                    numer -= c0 * (q_i @ sp_local[:, f] - q_i[f] * sp_local[f, f])
+                    # obs_pull: sum_{u in Ri} [c_obs - (c_obs-ci)*r̂^f_ui] * puf
+                    # ci is scalar — same weight for all users of this item
+                    obs_pull = c_obs * np.sum(p_f) - (c_obs - ci) * np.dot(p_f, hat_r)
 
-                    denom = (c_obs - c0) * np.dot(p_f, p_f) + c0 * sp_local[f, f] + reg
+                    # missing_pull: ci replaces c0 (this item's own weight)
+                    missing_pull = ci * (q_i @ sp_local[:, f] - q_i[f] * sp_local[f, f])
+
+                    numer = obs_pull - missing_pull
+                    denom = (c_obs - ci) * np.dot(p_f, p_f) + ci * sp_local[f, f] + reg
 
                     old_val = q_i[f]
                     q_i[f] = numer / denom
@@ -164,7 +197,7 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
 
         elapsed = time.time() - t_start
 
-        loss = _compute_loss_fast(P, Q, R_csr, c_obs, c0, reg)
+        loss = _compute_loss_fast(P, Q, R_csr, c_obs, c_items, reg)
         losses.append(loss)
         if verbose:
             print(f"Iteration {iteration + 1}/{num_iter} | "
@@ -177,29 +210,33 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
     return P, Q, losses
 
 
-def _compute_loss_fast(P, Q, R_csr, c_obs, c0, reg):
+def _compute_loss_fast(P, Q, R_csr, c_obs, c_items, reg):
     """
-    Compute weighted squared loss using the trace trick to avoid O(M*N) cost.
+    Compute weighted squared loss (paper Eq. 7) efficiently.
 
-    L = c0 * trace(P^T P @ Q^T Q)                        [all-pairs, r=0 assumed]
-      - c0 * sum_{(u,i) observed} (p_u^T q_i)^2          [remove wrong c0 term]
-      + c_obs * sum_{(u,i) observed} (1 - p_u^T q_i)^2   [add correct observed term]
-      + reg * (||P||^2 + ||Q||^2)
+    Decomposition:
+      1. All-pairs term (r=0, weight=ci):
+            sum_u sum_i ci*(p_u^T q_i)^2 = trace(Sp @ Sq_weighted)
+         where Sq_weighted = Q^T @ diag(c_items) @ Q
+      2. Correct observed entries: subtract ci*pred^2, add c_obs*(1-pred)^2
+      3. Add regularization.
+
+    Cost: O(k^3 + |R|*k).
     """
     M = P.shape[0]
     Sp = P.T @ P
-    Sq = Q.T @ Q
+    Sq = Q.T @ (Q * c_items[:, np.newaxis])  # weighted by ci
 
-    loss = c0 * np.trace(Sp @ Sq)
+    loss = np.trace(Sp @ Sq)
 
     for u in range(M):
         items = R_csr[u].indices
         if len(items) == 0:
             continue
         preds = Q[items] @ P[u]
-        loss -= c0 * np.dot(preds, preds)
+        loss -= np.dot(c_items[items], preds * preds)  # remove ci*pred^2
         residuals = 1.0 - preds
-        loss += c_obs * np.dot(residuals, residuals)
+        loss += c_obs * np.dot(residuals, residuals)   # add c_obs*(1-pred)^2
 
     loss += reg * (np.sum(P ** 2) + np.sum(Q ** 2))
     return loss
