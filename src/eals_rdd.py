@@ -32,7 +32,8 @@ from scipy import sparse
 
 def eals_train_rdd(sc, train_matrix, K=128, num_iter=50,
                    lam=0.01, w_obs=0.0, c0=512, alpha=0.4,
-                   num_partitions=None, seed=42, verbose=True):
+                   num_partitions=None, seed=42, verbose=True,
+                   eval_fn=None):
     """
     Train eALS model using PySpark RDDs with popularity-aware missing data weighting.
 
@@ -56,6 +57,8 @@ def eals_train_rdd(sc, train_matrix, K=128, num_iter=50,
         alpha         : Popularity exponent (paper: alpha, default 0.4).
                         Controls how strongly popular items are weighted as
                         negatives. alpha=0 gives uniform weights.
+        eval_fn       : Optional callable (P, Q) -> dict of metrics, called
+                        after each iteration for convergence tracking.
         num_partitions: Number of RDD partitions (default: sc.defaultParallelism).
         seed          : Random seed.
         verbose       : Print progress.
@@ -109,7 +112,8 @@ def eals_train_rdd(sc, train_matrix, K=128, num_iter=50,
     user_rdd = sc.parallelize(user_data, num_partitions).cache()
     item_rdd = sc.parallelize(item_data, num_partitions).cache()
 
-    losses = []
+    losses       = []
+    eval_history = []  # populated only when eval_fn is provided
 
     for iteration in range(num_iter):
         t_start = time.time()
@@ -224,10 +228,17 @@ def eals_train_rdd(sc, train_matrix, K=128, num_iter=50,
             print(f"Iteration {iteration + 1}/{num_iter} | "
                   f"loss={loss:.4f} | time={elapsed:.2f}s")
 
+        # Per-iteration evaluation (convergence tracking)
+        if eval_fn is not None:
+            metrics = eval_fn(P, Q)
+            metrics["iteration"] = iteration + 1
+            metrics["loss"]      = loss
+            eval_history.append(metrics)
+
     user_rdd.unpersist()
     item_rdd.unpersist()
 
-    return P, Q, losses
+    return P, Q, losses, eval_history
 
 
 def _compute_loss(P, Q, R_csr, c_obs, c_items, lam):
@@ -279,7 +290,7 @@ if __name__ == "__main__":
     sc.setLogLevel("WARN")
 
     print("\nTraining eALS (PySpark RDD) on Yelp — paper hyperparameters...")
-    P, Q, losses = eals_train_rdd(
+    P, Q, losses, _ = eals_train_rdd(
         sc,
         data["train_matrix"],
         K        = 128,   # paper: K=128 for Yelp
