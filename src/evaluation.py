@@ -98,7 +98,7 @@ if __name__ == "__main__":
     from eals_numpy import eals_train
 
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    data = load_and_prepare(data_dir, dataset="100k")
+    data = load_and_prepare(data_dir)
 
     print("\nTraining eALS for evaluation demo...")
     P, Q, losses = eals_train(

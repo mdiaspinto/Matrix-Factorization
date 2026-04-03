@@ -2,7 +2,7 @@
 Data Loading & Preprocessing for eALS with Implicit Feedback.
 
 Handles:
-- Loading MovieLens datasets (100K, 1M, 10M)
+- Loading the Yelp review dataset (yelp_academic_dataset_review.json)
 - Binarizing ratings into implicit feedback (interaction = 1, no interaction = 0)
 - Re-indexing user/item IDs to contiguous 0-based indices
 - Train/test splitting via leave-one-out (last interaction per user = test)
@@ -11,51 +11,54 @@ Handles:
 """
 
 import os
+import json
 import numpy as np
 from scipy import sparse
 from collections import defaultdict
+from datetime import datetime
 
 
-def load_movielens_raw(data_dir, dataset="100k"):
+def load_yelp_raw(data_dir):
     """
-    Load raw MovieLens interactions as a list of (user, item, rating, timestamp).
+    Load raw Yelp interactions from yelp_academic_dataset_review.json.
+
+    The file is in JSON-lines format: one JSON object per line.
+    Each object has: user_id (str), business_id (str), stars (float), date (str).
+
+    We treat each review as one implicit interaction regardless of star rating.
+    The date string (e.g. "2016-05-28 00:00:00") is converted to a Unix
+    timestamp integer for consistent chronological sorting in leave-one-out splitting.
 
     Args:
-        data_dir: Path to the data/ directory containing ml-100k/, ml-1m/, etc.
-        dataset: One of "100k", "1m", "10m".
+        data_dir: Path to the data/ directory containing yelp/ subdirectory.
 
     Returns:
-        List of tuples (user_id_raw, item_id_raw, rating, timestamp).
+        List of tuples (user_id_raw, business_id_raw, stars, timestamp_int).
     """
+    filepath = os.path.join(data_dir, "yelp", "yelp_academic_dataset_review.json")
+
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(
+            f"Yelp review file not found at {filepath}\n"
+            f"Run download_data.sh first to extract the dataset."
+        )
+
     interactions = []
+    date_fmt = "%Y-%m-%d %H:%M:%S"
 
-    if dataset == "100k":
-        filepath = os.path.join(data_dir, "ml-100k", "u.data")
-        with open(filepath, "r") as f:
-            for line in f:
-                parts = line.strip().split("\t")
-                user, item, rating, ts = int(parts[0]), int(parts[1]), float(parts[2]), int(parts[3])
-                interactions.append((user, item, rating, ts))
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            user_id = obj["user_id"]
+            business_id = obj["business_id"]
+            stars = float(obj["stars"])
+            ts = int(datetime.strptime(obj["date"], date_fmt).timestamp())
+            interactions.append((user_id, business_id, stars, ts))
 
-    elif dataset == "1m":
-        filepath = os.path.join(data_dir, "ml-1m", "ratings.dat")
-        with open(filepath, "r") as f:
-            for line in f:
-                parts = line.strip().split("::")
-                user, item, rating, ts = int(parts[0]), int(parts[1]), float(parts[2]), int(parts[3])
-                interactions.append((user, item, rating, ts))
-
-    elif dataset == "10m":
-        filepath = os.path.join(data_dir, "ml-10M100K", "ratings.dat")
-        with open(filepath, "r") as f:
-            for line in f:
-                parts = line.strip().split("::")
-                user, item, rating, ts = int(parts[0]), int(parts[1]), float(parts[2]), int(parts[3])
-                interactions.append((user, item, rating, ts))
-    else:
-        raise ValueError(f"Unknown dataset: {dataset}. Use '100k', '1m', or '10m'.")
-
-    print(f"Loaded {len(interactions)} raw interactions from MovieLens {dataset}")
+    print(f"Loaded {len(interactions)} raw interactions from Yelp")
     return interactions
 
 
@@ -224,11 +227,14 @@ def leave_one_out_split(interactions, num_users, num_items):
             train_cols.append(items_ts[0][0])
         else:
             # Last interaction = test
-            test_dict[u] = items_ts[-1][0]
-            # Rest = train
+            test_item = items_ts[-1][0]
+            test_dict[u] = test_item
+            
+            # Rest = train (strictly excluding the test item to prevent leakage)
             for item_id, _ in items_ts[:-1]:
-                train_rows.append(u)
-                train_cols.append(item_id)
+                if item_id != test_item:
+                    train_rows.append(u)
+                    train_cols.append(item_id)
 
     train_values = np.ones(len(train_rows), dtype=np.float64)
     train_matrix = sparse.csr_matrix(
@@ -273,18 +279,20 @@ def subsample(interactions, fraction, seed=42):
     return subsampled
 
 
-def load_and_prepare(data_dir, dataset="100k", rating_threshold=0.0,
-                     min_user_interactions=5, min_item_interactions=0,
+def load_and_prepare(data_dir, rating_threshold=0.0,
+                     min_user_interactions=10, min_item_interactions=10,
                      subsample_frac=1.0):
     """
     Full pipeline: load -> reindex -> binarize -> filter -> split -> build matrices.
 
+    Filtering defaults (min 10 interactions per user and item) match the
+    paper's preprocessing exactly.
+
     Args:
         data_dir: Path to data/ directory.
-        dataset: "100k", "1m", or "10m".
-        rating_threshold: Min rating to count as positive.
-        min_user_interactions: Drop users with fewer interactions (default 5).
-        min_item_interactions: Drop items with fewer interactions (default 0).
+        rating_threshold: Min rating to count as positive (default 0 = all reviews).
+        min_user_interactions: Drop users with fewer interactions (default 10).
+        min_item_interactions: Drop items with fewer interactions (default 10).
         subsample_frac: Fraction of users to keep (1.0 = all).
 
     Returns:
@@ -292,7 +300,7 @@ def load_and_prepare(data_dir, dataset="100k", rating_threshold=0.0,
             train_matrix, test_dict, num_users, num_items,
             user_map, item_map, full_matrix
     """
-    raw = load_movielens_raw(data_dir, dataset)
+    raw = load_yelp_raw(data_dir)
     reindexed, user_map, item_map, num_users, num_items = reindex_ids(raw)
     binarized = binarize(reindexed, threshold=rating_threshold)
 
@@ -341,7 +349,7 @@ if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(script_dir, "..", "data")
 
-    result = load_and_prepare(data_dir, dataset="100k")
+    result = load_and_prepare(data_dir)
 
     print(f"\n--- Summary ---")
     print(f"Users: {result['num_users']}")
