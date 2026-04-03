@@ -98,10 +98,11 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
 
                 for f in range(k):
                     q_f = Q_u[:, f]
-                    hat_r = 1.0 - pred_cache + p_u[f] * q_f
+                    hat_r = pred_cache - p_u[f] * q_f
 
-                    numer = (c_obs - c0) * np.dot(q_f, hat_r)
-                    numer -= c0 * (p_u @ sq_local[:, f] - p_u[f] * sq_local[f, f])
+                    obs_pull = c_obs * np.sum(q_f) - (c_obs - c0) * np.dot(q_f, hat_r)
+                    missing_pull = c0 * (p_u @ sq_local[:, f] - p_u[f] * sq_local[f, f])
+                    numer = obs_pull - missing_pull
 
                     denom = (c_obs - c0) * np.dot(q_f, q_f) + c0 * sq_local[f, f] + reg
 
@@ -139,11 +140,12 @@ def eals_train_rdd(sc, train_matrix, num_factors=64, num_iter=50,
 
                 for f in range(k):
                     p_f = P_i[:, f]
-                    hat_r = 1.0 - pred_cache + q_i[f] * p_f
+                    hat_r = pred_cache - q_i[f] * p_f
 
-                    numer = (c_obs - c0) * np.dot(p_f, hat_r)
-                    numer -= c0 * (q_i @ sp_local[:, f] - q_i[f] * sp_local[f, f])
+                    obs_pull = c_obs * np.sum(p_f) - (c_obs - c0) * np.dot(p_f, hat_r)
+                    missing_pull = c0 * (q_i @ sp_local[:, f] - q_i[f] * sp_local[f, f])
 
+                    numer = obs_pull - missing_pull
                     denom = (c_obs - c0) * np.dot(p_f, p_f) + c0 * sp_local[f, f] + reg
 
                     old_val = q_i[f]
