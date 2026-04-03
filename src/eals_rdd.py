@@ -251,7 +251,7 @@ if __name__ == "__main__":
     from data_loader import load_and_prepare
 
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    data = load_and_prepare(data_dir, dataset="100k")
+    data = load_and_prepare(data_dir)
 
     conf = SparkConf().setAppName("eALS-RDD").setMaster("local[*]")
     sc = SparkContext(conf=conf)
