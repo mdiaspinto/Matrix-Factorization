@@ -206,7 +206,7 @@ if __name__ == "__main__":
     from data_loader import load_and_prepare
 
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    data = load_and_prepare(data_dir, dataset="100k")
+    data = load_and_prepare(data_dir)
 
     print("\nTraining eALS (NumPy)...")
     P, Q, losses = eals_train(
